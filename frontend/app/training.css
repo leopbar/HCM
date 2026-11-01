@@ -1,0 +1,20 @@
+.training-company{border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:#53637b;font-size:12px;background:#fff}
+.training-tabs{display:flex;gap:5px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.training-tabs button{border:0;border-bottom:2px solid transparent;background:transparent;color:#718098;padding:11px 13px;display:flex;align-items:center;gap:7px;font-size:12px}
+.training-tabs button.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:650}
+.training-layout{display:grid;grid-template-columns:minmax(250px,330px) minmax(0,1fr);gap:16px;align-items:start}
+.exercise-list,.exercise-detail,.training-transfer-grid>.section-panel,.help-grid>.section-panel{padding:17px}
+.exercise-list .panel-head,.training-transfer-grid .panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}
+.exercise-item{display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;background:white;border:1px solid transparent;border-radius:8px;padding:11px 9px;color:var(--ink)}
+.exercise-item:hover,.exercise-item.selected{background:#f5f7fc;border-color:#dbe5ff}
+.exercise-item>span:last-child{display:grid;gap:4px}.exercise-item strong{font-size:12px;font-weight:650}.exercise-item small{font-size:10px;color:#8490a4}
+.exercise-status{height:21px;width:21px;flex:0 0 21px;border:1px solid #dbe2ed;border-radius:50%;display:grid;place-items:center;color:#8b98aa;font-size:12px}
+.exercise-status.completed{background:#e9f8f1;border-color:#ccebdd;color:#187b54}.exercise-status.in_progress{background:#fff7e6;color:#a06a00}
+.exercise-detail .panel-title,.help-grid .panel-title{margin:5px 0 9px}.training-objective,.help-grid p,.help-grid li{color:#63728a;font-size:12px;line-height:1.65}
+.exercise-detail h3{font-size:12px;margin:19px 0 9px}.training-steps{margin:0;padding-left:20px;color:#53637b;font-size:12px;line-height:1.8}.training-steps li{padding-left:3px;margin-bottom:4px}
+.training-expected{background:#f4f7fc;border:1px solid #e7ecf4;border-radius:8px;padding:12px 14px;margin-top:17px}.training-expected strong{font-size:11px}.training-expected p{font-size:11px;line-height:1.6;color:#62718a;margin:5px 0 0}
+.training-actions{display:flex;align-items:center;gap:10px;margin-top:16px}.exercise-checks{display:grid;gap:8px;margin-top:14px}.exercise-check{display:flex;gap:9px;padding:9px;border-radius:7px;background:#fafbfe}.exercise-check>div{display:grid;gap:4px}.exercise-check strong{font-size:11px}.exercise-check small{font-size:10px;color:#748199;line-height:1.4}.check-pass{color:#148055}.check-fail{color:#bb7700}
+.tag-success{background:#eaf8f1!important;color:#147653!important}.tag-warn{background:#fff6e5!important;color:#8b6200!important}.tag-danger{background:#fff0ef!important;color:#ad3428!important}
+.training-transfer-grid{display:grid;grid-template-columns:1fr 1.2fr;gap:16px;align-items:start}.training-transfer-grid>.section-panel{display:flex;flex-direction:column;gap:13px}.training-transfer-grid .panel-head{margin-bottom:2px}.training-target{border-radius:7px;padding:10px 12px;background:#f3f6fb;font-size:11px;color:#65748a}.import-error{font-size:11px;color:#a33b32;padding:3px 0}.training-transfer-grid td code{display:block;max-width:310px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+.help-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.help-grid>.section-panel>svg{color:var(--blue);margin-bottom:8px}.help-grid ul{padding-left:19px}.help-grid details{border-top:1px solid var(--line);padding:11px 0;font-size:12px}.help-grid summary{cursor:pointer;font-weight:650;color:#465670}.help-grid details p{margin:8px 0 0}.demo-data-card{grid-column:1/-1}.demo-data-tags{display:flex;flex-wrap:wrap;gap:7px}.demo-data-tags span{border:1px solid #e3e9f2;border-radius:20px;padding:7px 10px;font-size:10px;color:#65748a;background:#fafbfe}
+@media(max-width:900px){.training-layout,.training-transfer-grid,.help-grid{grid-template-columns:1fr}.demo-data-card{grid-column:auto}}
