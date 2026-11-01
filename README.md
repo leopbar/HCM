@@ -124,6 +124,15 @@ docker compose exec -e RESET_DEMO=YES backend python -m app.reset_demo
 
 No Windows, o servidor de desenvolvimento do frontend pode não perceber alterações de arquivos. Nesse caso, rode `docker compose restart frontend`.
 
+## Produção
+
+Cada push na `main` roda os testes do backend e a checagem do frontend no GitHub Actions e, se passarem, publica em https://hcm.lbai.dev (`.github/workflows/deploy.yml`).
+
+- No VPS, o projeto fica em `/opt/hcm` com o próprio `.env` (fora do Git) e sobe com `compose.prod.yaml`: banco sem porta exposta, cookie só por HTTPS, Swagger desligado.
+- `deploy/deploy.sh` atualiza o código, reconstrói os contêineres e confere o `/health`. A chave SSH do Actions só consegue executar esse script.
+- O nginx do host (`deploy/nginx-hcm.lbai.dev.conf`) encaminha `/api` para o backend e o resto para o frontend; o certificado é do Let's Encrypt (certbot).
+- Primeiro administrador: `docker compose -p hcm -f compose.prod.yaml exec backend python -m app.bootstrap_admin --email …` dentro de `/opt/hcm`.
+
 ## Integração com o ERP-AI
 
 O projeto `C:\projects\ERP-AI` usa `/api/integration/v1`. A integração fica desligada enquanto `HCM_INTEGRATION_TOKEN_SHA256` estiver vazio no `.env`.

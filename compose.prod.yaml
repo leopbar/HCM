@@ -1,0 +1,62 @@
+# Produção (VPS atrás do nginx do host): docker compose -p hcm -f compose.prod.yaml up -d --build
+# O nginx publica https://hcm.lbai.dev e encaminha /api para o backend e o resto para o frontend.
+services:
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hcm_lab}
+      POSTGRES_USER: ${POSTGRES_USER:-hcm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hcm} -d ${POSTGRES_DB:-hcm_lab}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-hcm}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB:-hcm_lab}
+      APP_SECRET: ${APP_SECRET:?Defina APP_SECRET no arquivo .env (64 caracteres aleatórios)}
+      CORS_ORIGINS: ${PUBLIC_URL:?Defina PUBLIC_URL no arquivo .env}
+      COOKIE_SECURE: "true"
+      ENABLE_API_DOCS: "false"
+      SESSION_HOURS: ${SESSION_HOURS:-8}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-60}
+      PASSWORD_MAX_AGE_DAYS: ${PASSWORD_MAX_AGE_DAYS:-90}
+      MAX_FAILED_LOGINS: ${MAX_FAILED_LOGINS:-5}
+      LOCK_MINUTES: ${LOCK_MINUTES:-15}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      HCM_INTEGRATION_TOKEN_SHA256: ${HCM_INTEGRATION_TOKEN_SHA256:-}
+      HCM_EXECUTION_TOKEN_SHA256: ${HCM_EXECUTION_TOKEN_SHA256:-}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8090}:8000"
+    depends_on:
+      database:
+        condition: service_healthy
+    # A porta só escuta em 127.0.0.1, então o único cliente é o nginx: confiar no X-Forwarded-For dele.
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips='*'"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3090}:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
