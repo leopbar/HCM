@@ -42,48 +42,64 @@ def latest_scope_config(db: Session, scope_key: str, as_of: date, environment: s
         .limit(1)
     )
 
-def resolve_effective_config(db: Session, employee: Employee, as_of: date | None = None, environment: str="production", simulation: bool=False):
-    """1) Atribuições de Configurações, na ordem parametrizada (a primeira atribuição cujo grupo inclui o colaborador vence);
-    2) regra própria de um dos grupos do colaborador; 3) regra da empresa; 4) padrão do sistema."""
-    from app.policies import active_config
-    today=as_of or date.today()
-    groups=employee_groups(db, employee)
-    names={g.name.lower(): g for g in groups}
-    assignments=active_config(db, employee.company_id, "config_assignments", environment)
-    ordered=assignments["vacations_simulation"] if simulation and assignments["vacations_simulation"] else assignments["vacations"]
-    process_label="Férias - Simulação" if ordered is assignments["vacations_simulation"] and simulation else "Férias"
-    for index, item in enumerate(ordered, 1):
-        group=names.get(str(item["group"]).lower())
+def _attr(config, key):
+    """Read a field from an ORM row or from a config_snapshot dict."""
+    return config[key] if isinstance(config, dict) else getattr(config, key)
+
+def resolve_rule(lookup, company_id: int, groups: list[dict], assignments: list[dict], company_name: str = "", process_label: str = "Férias"):
+    """Precedência pura, sem banco: 1) Atribuições de Configurações, na ordem parametrizada (a primeira
+    atribuição cujo grupo inclui o colaborador vence); 2) regra própria de um dos grupos do colaborador;
+    3) regra da empresa; 4) padrão do sistema.
+
+    `lookup(scope_key)` devolve a configuração vigente daquele escopo (linha ORM ou dicionário) ou None.
+    `groups` são os grupos do colaborador em ordem (principal primeiro), como [{"id", "name"}].
+    A integração e os testes automáticos usam esta mesma função, por isso ela não pode depender da sessão."""
+    names={str(g["name"]).lower(): g for g in groups}
+    for index, item in enumerate(assignments or [], 1):
+        group=names.get(str(item.get("group", "")).lower())
         if not group:
             continue
-        config=latest_scope_config(db, f"company:{employee.company_id}:config:{item['config']}", today, environment)
+        config=lookup(f"company:{company_id}:config:{item.get('config')}")
         if config:
-            origin={"scope":"assignment", "label":f"Configuração {config.config_code} - {config.name or ''}".strip(" -"), "scope_key":config.scope_key, "version":config.version,
-                    "group":group.name, "priority":index, "process":process_label}
-            why=(f"O colaborador participa do grupo {group.name}, atribuído à configuração {config.config_code} na posição {index} das Atribuições de Configurações ({process_label}). "
+            code=_attr(config, "config_code"); name=_attr(config, "name") or ""
+            origin={"scope":"assignment", "label":f"Configuração {code} - {name}".strip(" -"), "scope_key":_attr(config, "scope_key"), "version":_attr(config, "version"),
+                    "group":group["name"], "priority":index, "process":process_label}
+            why=(f"O colaborador participa do grupo {group['name']}, atribuído à configuração {code} na posição {index} das Atribuições de Configurações ({process_label}). "
                  "A ordenação define a prioridade quando o colaborador faz parte de mais de um grupo.")
             return config, origin, why
-    system=latest_scope_config(db, "system", today, environment)
-    company=latest_scope_config(db, f"company:{employee.company_id}:default", today, environment)
+    system=lookup("system")
+    company=lookup(f"company:{company_id}:default")
     group=None; group_record=None
     for candidate in groups:
-        group=latest_scope_config(db, f"company:{employee.company_id}:group:{candidate.id}", today, environment)
+        group=lookup(f"company:{company_id}:group:{candidate['id']}")
         if group:
             group_record=candidate; break
     selected=group or company or system
-    company_label=f"Empresa {employee.company.trade_name}" if employee.company else "Empresa"
+    company_text=company_name or str(company_id)
     if group:
-        origin={"scope":"group", "label":f"Grupo {group_record.name if group_record else employee.group_id}", "scope_key":group.scope_key, "version":group.version}
-        why=f"Para este funcionário, a regra efetiva vem do grupo {group_record.name if group_record else employee.group_id}, que prevalece sobre a configuração geral da empresa."
+        origin={"scope":"group", "label":f"Grupo {group_record['name']}", "scope_key":_attr(group, "scope_key"), "version":_attr(group, "version")}
+        why=f"Para este funcionário, a regra efetiva vem do grupo {group_record['name']}, que prevalece sobre a configuração geral da empresa."
     elif company:
-        origin={"scope":"company", "label":company_label, "scope_key":company.scope_key, "version":company.version}
-        why=f"A configuração da empresa {employee.company.trade_name if employee.company else employee.company_id} prevalece sobre o padrão do sistema."
+        origin={"scope":"company", "label":f"Empresa {company_text}" if company_name else "Empresa", "scope_key":_attr(company, "scope_key"), "version":_attr(company, "version")}
+        why=f"A configuração da empresa {company_text} prevalece sobre o padrão do sistema."
     elif system:
-        origin={"scope":"system", "label":"Padrão do sistema", "scope_key":system.scope_key, "version":system.version}
+        origin={"scope":"system", "label":"Padrão do sistema", "scope_key":_attr(system, "scope_key"), "version":_attr(system, "version")}
         why="Nenhuma regra vigente foi encontrada para o grupo ou para a empresa; foi aplicado o padrão do sistema."
     else:
         return None, None, "Não existe configuração de férias vigente."
     return selected, origin, why
+
+def resolve_effective_config(db: Session, employee: Employee, as_of: date | None = None, environment: str="production", simulation: bool=False):
+    """Resolução operacional por colaborador; delega a precedência a `resolve_rule`."""
+    from app.policies import active_config
+    today=as_of or date.today()
+    groups=employee_groups(db, employee)
+    assignments=active_config(db, employee.company_id, "config_assignments", environment)
+    ordered=assignments["vacations_simulation"] if simulation and assignments["vacations_simulation"] else assignments["vacations"]
+    process_label="Férias - Simulação" if ordered is assignments["vacations_simulation"] and simulation else "Férias"
+    company_name=employee.company.trade_name if employee.company else ""
+    return resolve_rule(lambda scope_key: latest_scope_config(db, scope_key, today, environment), employee.company_id,
+                        [{"id": g.id, "name": g.name} for g in groups], ordered, company_name, process_label)
 
 HOLIDAYS = {(1, 1), (4, 21), (5, 1), (9, 7), (10, 12), (11, 2), (11, 15), (11, 20), (12, 25)}
 ENTITLEMENT_DAYS = 30

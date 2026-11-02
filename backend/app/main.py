@@ -30,6 +30,7 @@ from app.access_api import router as access_router
 from app.integration_api import router as integration_router
 import app.integration_execution  # registers controlled execution routes on the integration router
 import app.integration_hr
+from app.integration_v2 import router as integration_v2_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -65,6 +66,7 @@ app.include_router(environment_router)
 app.include_router(training_router)
 app.include_router(access_router)
 app.include_router(integration_router)
+app.include_router(integration_v2_router)
 app.include_router(process_router)
 app.include_router(setup_router)
 app.include_router(recruitment_router)

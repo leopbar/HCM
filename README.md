@@ -135,10 +135,12 @@ Cada push na `main` roda os testes do backend e a checagem do frontend no GitHub
 
 ## Integração com o ERP-AI
 
-O projeto `C:\projects\ERP-AI` usa `/api/integration/v1`. A integração fica desligada enquanto `HCM_INTEGRATION_TOKEN_SHA256` estiver vazio no `.env`.
+O projeto `C:\projects\ERP-AI` usa `/api/integration/v1` (contrato em uso) e `/api/integration/v2` (contrato novo, para onde o ERP-AI está migrando). A integração fica desligada enquanto `HCM_INTEGRATION_TOKEN_SHA256` estiver vazio no `.env`.
 
-- **Escopo:** o piloto cobre ABC (`EMP001`) e os módulos de férias e Fase 4, com consulta, validação e aplicação somente em homologação.
-- **Aplicação:** exige também `X-HCM-Execution-Key`, verificado por `HCM_EXECUTION_TOKEN_SHA256`. As operações ficam em `integration_operations` e podem ser revertidas.
+- **Escopo:** qualquer empresa cadastrada, somente em homologação, com consulta, validação, aplicação, verificação e reversão.
+- **v1** (`integration_api.py`, `integration_execution.py`, `integration_hr.py`): Férias por empresa ou grupo, sem configurações nomeadas, e os quatro módulos legados (`admission`, `timekeeping`, `payroll`, `benefits`) por empresa. Permanece inalterado até o ERP-AI concluir a migração.
+- **v2** (`integration_v2.py`): catálogo com JSON Schema por campo, `contract_hash` e lista completa de módulos (`GET /modules`); todos os módulos de `policies.DEFAULTS` com validate, apply, verify e rollback; em Férias, configurações nomeadas (escopo `config_code`), Atribuições de Configurações no mesmo plano (`assignments`), participação em vários grupos (`member_count`, `overlap_count`) e regra efetiva por grupo com origem. Os testes automáticos usam `vacations.resolve_rule`, a mesma função de precedência da simulação operacional, e reprovam uma regra de grupo que uma atribuição sobrepõe.
+- **Aplicação:** exige também `X-HCM-Execution-Key`, verificado por `HCM_EXECUTION_TOKEN_SHA256`. As operações ficam em `integration_operations` (as de v2 levam `contract: 2` no payload e não aparecem nas rotas v1) e podem ser revertidas.
 - **Revogar o acesso:** apague as duas variáveis do `.env` e reinicie o backend.
 
 ## Estrutura
