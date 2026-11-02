@@ -4,9 +4,8 @@ import copy
 from datetime import date, timedelta
 from uuid import uuid4
 import pytest
-from test_api import client, auth  # noqa: F401 - pytest fixture reuse
-from test_integration import integration  # noqa: F401
-from test_execution import executor  # noqa: F401
+from test_api import client, auth  # noqa: F401 - pytest fixture reuse; integration/executor come from conftest
+import app.integration_v2 as v2
 from app.integration_v2 import PlanInput, canonical, plan_hash
 from app.policies import DEFAULTS
 from app.vacations import CONFIG_FIELDS, next_valid_start
@@ -73,9 +72,10 @@ def test_catalog_lists_every_module_with_schemas_and_stable_hash(integration):
     assert general["schema"]["items"]["required"][0] == "calculation_group"
     assert workflow["contract_hash"] != catalog["contract_hash"] != policy["contract_hash"]
     assert http.get(V2 + "/modules/inexistente/catalog", headers=headers).status_code == 404
-    # The v1 contract is untouched.
-    legacy = http.get(V1 + "/catalog", headers=headers).json()
-    assert legacy["version"] == "vacations-1" and len(legacy["available_modules"]) == 5 and "contract_hash" not in legacy
+    assert all(item["description"] for item in modules["items"] if item["id"] != "other")
+    # The v1 contract is retired: its routes no longer exist.
+    assert http.get(V1 + "/catalog", headers=headers).status_code == 404
+    assert http.get(V1 + "/vacations/snapshot?company_code=EMP001", headers=headers).status_code == 404
     assert http.get(V2 + "/companies?query=abc", headers=headers).json()["items"][0]["code"] == "EMP001"
 
 
@@ -105,10 +105,7 @@ def test_snapshot_exposes_named_configurations_assignments_and_memberships(integ
     # The operational simulator agrees with the snapshot: the employee is in both groups and the assignment wins.
     result = simulate(http, consultant, employee.id)
     assert result["origin"]["scope"] == "assignment" and result["effective_configuration"]["config_code"] == "CFG-B"
-    # v1 keeps hiding named rows and counting only the primary group.
-    legacy = http.get(V1 + "/vacations/snapshot?company_code=EMP001", headers=headers).json()
-    assert all("config_code" not in row for row in legacy["schedules"]["homologation"])
-    assert {group["name"]: group["employee_count"] for group in legacy["groups"]} == {"Gestores": 1, "Operacional": 0}
+    assert {group["name"]: group["employee_count"] for group in snapshot["groups"]} == {"Gestores": 1, "Operacional": 0}  # primary counts kept for continuity
 
 
 def test_validate_reports_errors_without_writing(integration):
@@ -136,7 +133,7 @@ def test_apply_named_configuration_with_assignment_verify_and_rollback(executor)
     validation = http.post(V2 + "/vacations/validate", headers=headers, json={key: plan[key] for key in ("company_code", "effective_from", "configurations", "assignments")}).json()
     assert validation["valid"] is True, validation
     assert http.post(V2 + "/vacations/apply", headers=read_headers, json=plan).status_code == 403
-    assert http.post(V1 + "/vacations/apply", headers=headers, json={**plan, "configurations": plan["configurations"]}).status_code in (403, 422)
+    assert http.post(V1 + "/vacations/apply", headers=headers, json=plan).status_code == 404
     response = http.post(V2 + "/vacations/apply", headers=headers, json=plan)
     assert response.status_code == 200, response.text
     operation = response.json()
@@ -158,7 +155,6 @@ def test_apply_named_configuration_with_assignment_verify_and_rollback(executor)
     assert repeat["created_config_ids"] == operation["created_config_ids"]
     changed = copy.deepcopy(plan); changed["approved_by"] = "Outra pessoa"
     assert http.post(V2 + "/vacations/apply", headers=headers, json=changed).status_code == 409
-    assert http.get(f"{V1}/vacations/operations/{plan['operation_id']}", headers=headers).status_code == 404
     verified = http.get(f"{V2}/vacations/operations/{plan['operation_id']}/verify", headers=read_headers).json()
     assert verified["report"]["passed"]
     rollback = {"expected_fingerprint": after["fingerprint"], "reason": "Reversão do teste do contrato v2"}
@@ -188,9 +184,6 @@ def test_group_rule_shadowed_by_assignment_fails_automatic_tests(executor):
     shadow = next(check for check in operation["report"]["checks"] if check["name"].startswith("Regra planejada é a efetiva"))
     assert shadow["passed"] is False and "CFG-X" in shadow["detail"]
     assert http.get(V2 + "/vacations/snapshot?company_code=EMP001", headers=headers).json()["fingerprint"] == before["fingerprint"]
-    # The same plan through the old contract would have been applied and reported as passing: that is the blind spot v2 closes.
-    legacy_before = http.get(V1 + "/vacations/snapshot?company_code=EMP001", headers=headers).json()
-    assert all(row["configuration"].get("config_code") is None for row in legacy_before["effective"]["homologation"])
 
 
 def test_generic_module_workflow_validate_apply_verify_rollback(executor):
@@ -225,7 +218,6 @@ def test_generic_module_workflow_validate_apply_verify_rollback(executor):
     finally:
         generator.close()
     assert http.get(f"{path}/operations/{plan['operation_id']}/verify", headers=headers).json()["report"]["passed"]
-    assert http.get(f"{V1}/modules/workflow/snapshot?company_code=EMP002", headers=headers).status_code == 404
     reverted = http.post(f"{path}/operations/{plan['operation_id']}/rollback", headers=headers, json={"expected_fingerprint": operation["after_snapshot"]["fingerprint"], "reason": "Restaurar o fluxo padrão"})
     assert reverted.status_code == 200, reverted.text
     assert http.get(path + "/snapshot?company_code=EMP002", headers=headers).json()["fingerprint"] == before["fingerprint"]
@@ -261,3 +253,78 @@ def test_generic_module_round_trip_keeps_defaults_and_cross_checks(module, execu
     reverted = http.post(f"{path}/operations/{plan['operation_id']}/rollback", headers=headers, json={"expected_fingerprint": operation["after_snapshot"]["fingerprint"], "reason": "Restaurar o módulo"})
     assert reverted.status_code == 200, reverted.text
     assert http.get(path + "/snapshot?company_code=EMP001", headers=headers).json()["fingerprint"] == before["fingerprint"]
+
+
+# ---- behaviours ported from the retired v1 suite
+
+def test_integration_is_disabled_without_secret(client, monkeypatch):
+    monkeypatch.delenv("HCM_INTEGRATION_TOKEN_SHA256", raising=False)
+    assert client[0].get(V2 + "/catalog").status_code == 401
+    assert client[0].get(V2 + "/companies?query=ABC").status_code == 401
+
+
+def test_company_lookup_accents_homonyms_and_no_personal_data(integration):
+    http, refs, headers = integration
+    for query in ("abc", "ABC Ltda", "Empresa ABC", "EMP001"):
+        data = http.get(V2 + "/companies", params={"query": query}, headers=headers).json()
+        assert data["items"][0]["name"] == "ABC" and data["items"][0]["legal_name"] == "ABC Ltda" and data["items"][0]["configuration_allowed"]
+    assert http.get(V2 + "/companies?query=industria", headers=headers).json()["items"][0]["name"] == "Indústria"
+    assert http.get(V2 + "/companies?query=inexistente", headers=headers).json()["items"] == []
+    from app.database import get_db
+    from app.main import app
+    from app.models import Company
+    generator = app.dependency_overrides[get_db](); db = next(generator)
+    try:
+        db.add(Company(code="EMP003", legal_name="ABC Serviços Ltda", trade_name="ABC", cnpj="00.000.000/0003-03", city="Recife", state="PE", sector="Serviços", status="Ativa")); db.commit()
+    finally:
+        generator.close()
+    assert {c["legal_name"] for c in http.get(V2 + "/companies?query=abc", headers=headers).json()["items"]} == {"ABC Ltda", "ABC Serviços Ltda"}
+    response = http.get(V2 + "/vacations/snapshot?company_code=EMP001", headers=headers)
+    assert response.status_code == 200 and "salary" not in response.text and "full_name" not in response.text and "email" not in response.text
+    assert http.get("/api/companies", headers=headers).status_code == 401
+    assert http.put("/api/vacations/configurations", headers=headers, json={}).status_code == 401
+
+
+def test_stale_plan_tampered_hash_and_later_changes_are_blocked(executor):
+    http, refs, headers, _ = executor
+    consultant = auth(http, "consultor@hcmlab.example.com")
+    before = http.get(V2 + "/vacations/snapshot?company_code=EMP001", headers=headers).json()
+    first = packet(before, [configuration(before, max_installments=3)])
+    tampered = copy.deepcopy(first); tampered["configurations"][0]["max_installments"] = 1
+    assert http.post(V2 + "/vacations/apply", headers=headers, json=tampered).status_code == 409
+    operation = http.post(V2 + "/vacations/apply", headers=headers, json=first).json()
+    assert operation["status"] == "applied"
+    stale = copy.deepcopy(first); stale["operation_id"] = str(uuid4())
+    assert http.post(V2 + "/vacations/apply", headers=headers, json=stale).status_code == 409
+    manual = {key: value for key, value in first["configurations"][0].items() if key not in ("config_code", "name", "simulation_text")}
+    manual["min_advance_days"] += 1
+    assert http.put("/api/vacations/configurations", headers=consultant, json=manual).status_code == 200
+    rollback = {"expected_fingerprint": operation["after_snapshot"]["fingerprint"], "reason": "Não deve desfazer mudança posterior"}
+    assert http.post(f"{V2}/vacations/operations/{first['operation_id']}/rollback", headers=headers, json=rollback).status_code == 409
+
+
+def test_failed_automatic_tests_roll_back_the_entire_batch(executor, monkeypatch):
+    http, _, headers, _ = executor
+    before = http.get(V2 + "/vacations/snapshot?company_code=EMP001", headers=headers).json()
+    plan = packet(before, [configuration(before, max_installments=3)])
+    monkeypatch.setattr(v2, "test_result", lambda *args: {"passed": False, "checks": []})
+    response = http.post(V2 + "/vacations/apply", headers=headers, json=plan)
+    assert response.status_code == 200 and response.json()["status"] == "failed" and response.json()["report"]["rolled_back"]
+    assert http.get(V2 + "/vacations/snapshot?company_code=EMP001", headers=headers).json()["fingerprint"] == before["fingerprint"]
+
+
+def test_group_and_future_date_rollback_restores_inheritance(executor):
+    from datetime import timedelta
+    http, _, headers, _ = executor
+    future = (date.today() + timedelta(days=30)).isoformat()
+    before = http.get(f"{V2}/vacations/snapshot?company_code=EMP001&as_of={future}", headers=headers).json()
+    group_id = before["groups"][0]["id"]
+    plan = packet(before, [{**configuration(before, group_id=group_id, max_installments=3), "effective_from": future}])
+    plan["effective_from"] = future
+    operation = http.post(V2 + "/vacations/apply", headers=headers, json=plan).json()
+    assert operation["status"] == "applied" and operation["report"]["passed"], operation["report"]
+    effective = {row["group_name"]: row for row in operation["after_snapshot"]["effective"]["homologation"]}
+    assert effective["Gestores"]["configuration"]["max_installments"] == 3 and effective["Gestores"]["origin"]["scope"] == "group"
+    assert effective["Regra geral"]["configuration"]["max_installments"] == 2
+    reverted = http.post(f"{V2}/vacations/operations/{plan['operation_id']}/rollback", headers=headers, json={"expected_fingerprint": operation["after_snapshot"]["fingerprint"], "reason": "Restaurar herança original"})
+    assert reverted.status_code == 200 and reverted.json()["report"]["rollback"]["restored_snapshot"]["fingerprint"] == before["fingerprint"]
