@@ -1,17 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Briefcase, Building2, CalendarDays, ClipboardList, Clock3, FileCheck2, FolderTree, GitCompareArrows, Home, Inbox, LayoutDashboard, ListChecks, Menu, Network, ShieldCheck, UserRound, Users, WalletCards, Workflow, Gift, type LucideIcon } from "lucide-react";
+import { ArrowRight, BookOpen, Briefcase, CalendarDays, ClipboardList, Clock3, FileCheck2, FolderTree, Home, Inbox, LayoutDashboard, ListChecks, Menu, UserRound, Users, WalletCards, Workflow, Gift, type LucideIcon } from "lucide-react";
 import type { SessionUser } from "./http";
 
-export type NavTarget = { view: string; suite?: string; processTab?: "new" | "mine" | "manager" | "config"; action?: "my-data" };
+export type NavTarget = { view: string; suite?: string; processTab?: "new" | "mine" | "manager"; action?: "my-data" };
 type Item = { key: string; label: string; icon: LucideIcon; target: NavTarget; show?: boolean };
 
 const can = (user: SessionUser, module: string) => !user.allowed_modules || user.allowed_modules.includes(module);
 
-/** Menu da Suíte (RH, consultor e administrador): operação separada da configuração. */
+/** Menu da Suíte (RH, consultor e administrador): o menu só opera e consulta; regras e cadastros ficam na árvore da Suíte. */
 export function StaffSidebar({ user, activeKey, onNavigate }: { user: SessionUser; activeKey: string; onNavigate: (t: NavTarget) => void }) {
-  const admin = user.role === "system_admin"; const configurer = admin || user.role === "consultant";
+  const configurer = user.role === "system_admin" || user.role === "consultant";
   const groups: { title: string; items: Item[] }[] = [
     { title: "Operação", items: [
       { key: "dashboard", label: "Painel", icon: LayoutDashboard, target: { view: "dashboard" } },
@@ -26,11 +26,6 @@ export function StaffSidebar({ user, activeKey, onNavigate }: { user: SessionUse
     ] },
     { title: "Configuração", items: [
       { key: "suite", label: "Suíte de parametrização", icon: FolderTree, target: { view: "suite", suite: "contratacao" } },
-      { key: "companies", label: "Empresas", icon: Building2, target: { view: "companies" } },
-      { key: "setup", label: "Cargos e vagas", icon: Network, target: { view: "setup" } },
-      { key: "suite:processos", label: "Processos parametrizáveis", icon: ListChecks, target: { view: "suite", suite: "atribuicoes-selecao" } },
-      { key: "suite:ambientes", label: "Ambientes / Migrador", icon: GitCompareArrows, target: { view: "suite", suite: "ambientes" }, show: configurer || user.role === "hr_manager" },
-      { key: "access", label: "Usuários e acessos", icon: ShieldCheck, target: { view: "access" }, show: admin },
     ] },
     { title: "Treinamento", items: [
       { key: "training", label: "Aprenda a Parametrizar", icon: BookOpen, target: { view: "training" }, show: configurer },
@@ -72,4 +67,11 @@ export function PortalMenu({ user, activeKey, onNavigate }: { user: SessionUser;
     {open && <nav className="portal-dropdown" aria-label="Portal do Colaborador"><div className="portal-dropdown-title">Portal do Colaborador</div>
       {items.filter(i => i.show !== false).map(item => <button key={item.key} className={activeKey === item.key ? "active" : ""} onClick={() => { setOpen(false); onNavigate(item.target); }}><item.icon size={16} /><span>{item.label}</span></button>)}</nav>}
   </div>;
+}
+
+/** Atalho discreto de uma tela de operação para o item da Suíte onde a regra é parametrizada. */
+export function SuiteLink({ user, nodeId, onOpen }: { user: SessionUser; nodeId: string; onOpen?: (nodeId: string) => void }) {
+  if (!onOpen || user.role === "employee") return null;
+  const configurer = user.role === "system_admin" || user.role === "consultant";
+  return <button type="button" className="suite-link" onClick={() => onOpen(nodeId)}>{configurer ? "Parametrizar na Suíte" : "Ver parametrização na Suíte"}<ArrowRight size={13} /></button>;
 }

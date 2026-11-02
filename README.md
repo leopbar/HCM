@@ -36,7 +36,7 @@ Endereços:
 - Interface: http://localhost:3000
 - API: http://localhost:8000. O Swagger em `/docs` fica desligado; para ligar em desenvolvimento, use `ENABLE_API_DOCS=true`.
 
-Não há contas pré-definidas. O administrador cria as contas em **Usuários e acessos** com uma senha temporária, e cada pessoa define a própria senha no primeiro login.
+Não há contas pré-definidas. O administrador cria as contas na Suíte de parametrização, em **Segurança › Usuários e Acessos**, com uma senha temporária, e cada pessoa define a própria senha no primeiro login.
 
 ## Segurança
 
@@ -49,7 +49,7 @@ Não há contas pré-definidas. O administrador cria as contas em **Usuários e 
   - não pode conter o nome nem o e-mail;
   - armazenada com PBKDF2-SHA256 (310 mil iterações);
   - validade de 90 dias (`PASSWORD_MAX_AGE_DAYS`).
-- **Bloqueio de conta:** 5 senhas erradas bloqueiam a conta por 15 minutos. O administrador pode desbloquear antes em **Usuários e acessos**. Há também um limite de tentativas de login por IP.
+- **Bloqueio de conta:** 5 senhas erradas bloqueiam a conta por 15 minutos. O administrador pode desbloquear antes em **Segurança › Usuários e Acessos**. Há também um limite de tentativas de login por IP.
 - **Cabeçalhos de segurança:** CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`. O CORS libera apenas métodos e cabeçalhos explícitos.
 - **Contêineres:** o backend roda como usuário sem privilégios, e o banco e as portas ficam restritos ao computador local.
 
@@ -59,9 +59,9 @@ Não há contas pré-definidas. O administrador cria as contas em **Usuários e 
 | --- | --- |
 | Cadastro de empresa, estrutura e funcionários | CNPJ e CPF com dígito verificador, UF válida, gestor imediato (sem ciclos), tipo de contrato, dados pessoais, ficha com histórico, renomear e excluir estrutura sem uso |
 | Configurações por Empresa: Contratação | Experiência, exigência da tabela salarial, do quadro de vagas e controle por posição. A admissão aprovada cria o funcionário |
-| Configurações por Empresa: Férias / Recesso | Período aquisitivo e concessivo, até 3 parcelas (uma com 14 dias ou mais, nenhuma com menos de 5), abono pecuniário de até 1/3, bloqueio de início nos 2 dias antes de feriado ou DSR, aviso com 30 dias e ciência do colaborador. Recesso proporcional para estagiários |
+| Férias e Recesso de estágio | Período aquisitivo e concessivo, até 3 parcelas (uma com 14 dias ou mais, nenhuma com menos de 5), abono pecuniário de até 1/3, bloqueio de início nos 2 dias antes de feriado ou DSR, aviso com 30 dias e ciência do colaborador. Recesso proporcional para estagiários |
 | Configurações por Empresa: Rescisão / Aviso Prévio | Motivos, aviso trabalhado, indenizado ou dispensado, aviso proporcional (Lei 12.506), desligamento com bloqueio do acesso |
-| Configurações por Empresa: Vale-Transporte | Linhas e tarifas, solicitação, desconto de até 6% calculado na folha |
+| Vale-Transporte | Linhas e tarifas (Cadastros da Empresa), solicitação, desconto de até 6% calculado na folha |
 | Configurações por Empresa: Posição, Quadro de Vagas, Tabela Salarial | Cadastros em **Cargos, vagas e organograma**, usados por admissão, movimentação e requisição |
 | Processos Parametrizáveis | Dependentes, Alteração de dados pessoais, Afastamento/Ausência, Movimentação (movimentar, ceder ou buscar colaborador), Requisição de pessoal, Rescisão, Recesso, Vale-transporte, Lançamento de valores, Férias e Benefícios |
 | Atribuições de Seleção de Colaboradores | Próprio solicitante, subordinados diretos, indiretos ou por visibilidade, por processo e grupo do solicitante |
@@ -81,11 +81,12 @@ Ficam fora do escopo: avaliação de desempenho, SST, People Analytics, assinatu
 
 O sistema tem duas experiências:
 
-- **Suíte (RH, consultor e administrador):** menu lateral em três grupos. *Operação* traz Painel, Funcionários, Gerenciador de processos, Admissão, Férias, Ponto, Folha, Benefícios e Recrutamento. *Configuração* traz Suíte de parametrização, Empresas, Cargos e vagas, Processos parametrizáveis, Ambientes/Migrador e Usuários e acessos. *Treinamento* traz Aprenda a Parametrizar.
+- **Suíte (RH, consultor e administrador):** menu lateral em três grupos. *Operação* traz Painel, Funcionários, Gerenciador de processos, Admissão, Férias, Ponto, Folha, Benefícios e Recrutamento. *Configuração* traz só a Suíte de parametrização. *Treinamento* traz Aprenda a Parametrizar. As telas de operação não alteram regras: cada uma tem o atalho "Parametrizar na Suíte →" (para o RH, "Ver parametrização na Suíte →"), que abre o item certo da árvore com a empresa já selecionada.
 - **Suíte de parametrização:** árvore de configurações organizada por caminhos. Cada tela mostra o caminho completo, a barra de ações (Salvar, Recarregar, Ajuda) e a explicação do parâmetro. Exemplos:
-  - *Configuração › Configurações por Empresa › Contratação / Férias e Recesso / Rescisão e Aviso Prévio / Outros (Vale Transporte, Posição, Quadro de Vagas, Tabela Salarial)*;
+  - *Configuração › Cadastros da Empresa › Empresas / Estrutura Organizacional / Tipo de Cargo / Tabela Salarial / Quadro de Vagas / Posição / Linhas de Vale-Transporte / Organograma*. Os cadastros gravam direto, sem homologação, e a tela mostra isso;
+  - *Configuração › Configurações por Empresa › Contratação / Recesso de estágio / Rescisão e Aviso Prévio / Vale-Transporte*;
   - *Configuração › Autoatendimento › Processos › Atribuições de Seleção de Colaboradores / Atribuições de Configurações / Férias / Configurações Gerais (Guias SLA, Gerenciador de Processos, Férias, Benefícios, Dependentes, Alteração de Dados Pessoais, Afastamento/Ausência, Movimentação, Requisição, Rescisão, Recesso, Vale Transporte, Lançamento de Valores, Servidor de E-mail, Migrador)*;
-  - *Configuração › Ponto / Folha de Pagamento / Recrutamento e Seleção / Ambientes e Publicação / Segurança*.
+  - *Configuração › Controle de Ponto / Folha de Pagamento / Recrutamento e Seleção / Ambientes e Publicação / Segurança*.
 - **Portal do Colaborador (perfil Funcionário):** sem menu lateral. O botão ≡ abre Início, Meus Dados, Solicitações, Recrutamento (vagas internas), Minhas Tarefas (gestores), Gerenciar Processos, Férias, Controle de ponto e Benefícios.
 
 ## Perfis e o que cada um vê
@@ -97,7 +98,7 @@ O sistema tem duas experiências:
 | Gestor de RH | Abre e aprova solicitações da própria empresa, mantém cadastros (funcionários, tabela salarial, quadro de vagas, posições, vale-transporte, grupos) | Não; consulta a Suíte em modo leitura | Só a própria empresa; sempre em Produção |
 | Funcionário (Portal) | Solicita para si (e para a equipe, conforme Atribuições de Seleção), aprova como gestor imediato, registra ponto | Não; não lê parametrização (só regras de ponto e benefícios) | Só os próprios dados e os da equipe |
 
-Grupos de acesso (Usuários e acessos) restringem ainda mais os módulos de um Funcionário ou Gestor de RH: férias, ponto, benefícios, admissão, folha, processos e recrutamento.
+Grupos de acesso (Segurança › Usuários e Acessos) restringem ainda mais os módulos de um Funcionário ou Gestor de RH: férias, ponto, benefícios, admissão, folha, processos e recrutamento.
 
 ## Como experimentar
 
