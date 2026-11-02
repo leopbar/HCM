@@ -37,9 +37,36 @@ def snapshot_hash(snapshot):
 def plan_hash(expected_fingerprint, configurations, assignments):
     return digest({"expected_fingerprint": expected_fingerprint, "configurations": configurations, "assignments": assignments})
 
+MODULE_DESCRIPTIONS = {
+    "vacations": "Regras de solicitação de férias: processo habilitado, quem pode solicitar, aprovação, simulação, parcelas, antecedência mínima, adiantamento do 13º e saldo visível. Por empresa, grupo ou configuração nomeada.",
+    "vacation_policy": "Política de férias da empresa: abono pecuniário, regras CLT de parcelamento, bloqueio antes de feriado e DSR, aviso, ciência do colaborador, prazo mínimo de aprovação e Guia Férias (folhas por grupo de cálculo e tipo de cargo).",
+    "config_assignments": "Atribuições de Configurações: lista ordenada que liga grupos de colaboradores a configurações nomeadas de férias, para Férias e Férias - Simulação.",
+    "workflow": "Fluxos de aprovação e SLA de todos os processos: etapas (gestor imediato, RH, administrador, RH de destino), prazos em horas úteis, expediente e exceções por grupo.",
+    "assignments": "Atribuições de Seleção de Colaboradores: para quem cada processo pode ser aberto (próprio solicitante, subordinados diretos, indiretos ou por visibilidade) e de onde vem a configuração.",
+    "process_fields": "Informações adicionais: campos extras por processo (texto, número, data, sim/não, lista) gravados na solicitação.",
+    "admission": "Admissão: antecedência mínima e máxima, fins de semana e feriados, aprovação, documentos obrigatórios e retroatividade.",
+    "contracting": "Contratação: contrato de experiência, criação do funcionário na aprovação, exigência da tabela salarial, do quadro de vagas e controle por posição.",
+    "timekeeping": "Controle de ponto: jornada diária, intervalo mínimo, tolerância de atraso, horas extras e seu limite, aprovação e ajuste manual.",
+    "work_schedule": "Jornada e escala: horários previstos de entrada e saída e dias de trabalho.",
+    "payroll": "Folha demonstrativa: processo habilitado, moeda de apresentação e aviso de cálculo demonstrativo.",
+    "payroll_setup": "Grupos de cálculo e folhas de pagamento usados pela Guia Férias e pelo cadastro de colaboradores.",
+    "benefits": "Benefícios: processo habilitado e solicitação pelo próprio colaborador.",
+    "termination": "Rescisão e aviso prévio: aviso proporcional, dias base, adicionais por ano, máximo, desativação do acesso e retroatividade.",
+    "transport": "Vale-transporte: processo, solicitação pelo colaborador, desconto percentual e dias úteis por mês.",
+    "dependents": "Dependentes: processo, solicitação pelo colaborador, máximo de dependentes e exigência de CPF.",
+    "personal_data": "Alteração de dados pessoais: quais dados o colaborador pode alterar.",
+    "leave": "Afastamento e ausência: processo, solicitação, limite retroativo e duração máxima.",
+    "movement": "Movimentação: alteração salarial, aumento máximo, tabela salarial e quadro de vagas.",
+    "transfer": "Cessão e busca de colaborador entre empresas.",
+    "requisition": "Requisição de pessoal: quadro de vagas e criação de posições.",
+    "recess": "Recesso de estágio: dias por ano, antecedência mínima e períodos.",
+    "value_entry": "Lançamento de valores: valor máximo por lançamento.",
+    "recruitment": "Recrutamento e seleção: etapas, critérios de avaliação, candidaturas internas, requisição obrigatória e retenção de dados.",
+}
+
 def available_modules():
-    return [{"id": "vacations", "label": "Férias", "scopes": ["company", "group", "config"]},
-            *[{"id": module, "label": LABELS[module], "scopes": ["company"]} for module in INTEGRATION_MODULES]]
+    return [{"id": "vacations", "label": "Férias", "scopes": ["company", "group", "config"], "description": MODULE_DESCRIPTIONS["vacations"]},
+            *[{"id": module, "label": LABELS[module], "scopes": ["company"], "description": MODULE_DESCRIPTIONS.get(module, "")} for module in INTEGRATION_MODULES]]
 
 CAPABILITIES = {"apply_homologation": True, "automatic_tests": True, "rollback": True, "production_write": False,
                 "named_configurations": True, "assignments": True, "contract_hash": True}
