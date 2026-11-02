@@ -288,6 +288,60 @@ def active_config(db: Session, company_id: int, module: str, environment: str = 
     row = db.scalar(select(HRModuleConfiguration).where(HRModuleConfiguration.company_id == company_id, HRModuleConfiguration.module == module, HRModuleConfiguration.environment == environment, HRModuleConfiguration.revoked.is_(False), HRModuleConfiguration.effective_from <= date.today()).order_by(HRModuleConfiguration.effective_from.desc(), HRModuleConfiguration.version.desc()).limit(1))
     return normalize(module, row.values) if row else DEFAULTS[module]
 
+HHMM_PATTERN = r"^([01][0-9]|2[0-3]):[0-5][0-9]$"
+_STEP_SCHEMA = {"type": "object", "properties": {"approver": {"type": "string", "enum": list(ALL_STEPS)}, "sla_hours": {"type": "integer", "minimum": 1, "maximum": 720}, "finish": {"type": "boolean"}},
+                "required": ["approver", "sla_hours"], "additionalProperties": False}
+_STEPS_SCHEMA = {"type": "array", "maxItems": 5, "items": _STEP_SCHEMA}
+_GENERAL_CONFIG_SCHEMA = {"type": "object", "additionalProperties": False, "required": list(GENERAL_CONFIG_KEYS), "properties": {
+    "calculation_group": {"type": "string", "minLength": 1, "maxLength": 60}, "job_types": {"type": "array", "items": {"type": "string", "enum": list(JOB_TYPES)}, "uniqueItems": True},
+    **{key: {"type": "string", "minLength": 1} for key in GENERAL_CONFIG_KEYS[2:9]}, "monthly_values_treatment": {"type": "string", "enum": list(MONTHLY_TREATMENTS)},
+    **{key: {"type": "string"} for key in ("simulation_sheet_1", "simulation_sheet_2", "simulation_sheet_3")}}}
+_PROCESS_FIELD_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["name", "label", "type", "required", "options", "help"], "properties": {
+    "name": {"type": "string", "pattern": r"^[a-z][a-z0-9_]{1,30}$"}, "label": {"type": "string", "minLength": 2, "maxLength": 60}, "type": {"type": "string", "enum": list(FIELD_TYPES)},
+    "required": {"type": "boolean"}, "options": {"type": "array", "maxItems": 20, "items": {"type": "string", "minLength": 1}}, "help": {"type": "string", "maxLength": 200}}}
+_ASSIGNMENT_ITEM_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["group", "config"], "properties": {"group": {"type": "string", "minLength": 1}, "config": {"type": "string", "minLength": 1}}}
+SPECIAL_SCHEMAS = {
+    ("work_schedule", "expected_start_time"): {"type": "string", "pattern": HHMM_PATTERN}, ("work_schedule", "expected_end_time"): {"type": "string", "pattern": HHMM_PATTERN},
+    ("work_schedule", "workdays"): {"type": "array", "minItems": 1, "uniqueItems": True, "items": {"type": "integer", "minimum": 0, "maximum": 6}},
+    ("workflow", "business_start"): {"type": "string", "pattern": HHMM_PATTERN}, ("workflow", "business_end"): {"type": "string", "pattern": HHMM_PATTERN},
+    ("workflow", "business_days"): {"type": "array", "minItems": 1, "uniqueItems": True, "items": {"type": "integer", "minimum": 0, "maximum": 6}},
+    ("workflow", "processes"): {"type": "object", "additionalProperties": False, "required": list(PROCESS_KEYS), "properties": {
+        process: {"type": "object", "additionalProperties": False, "required": ["steps", "group_overrides"], "properties": {"steps": _STEPS_SCHEMA, "group_overrides": {"type": "object", "additionalProperties": _STEPS_SCHEMA}}} for process in PROCESS_KEYS}},
+    ("vacation_policy", "general_configs"): {"type": "array", "maxItems": 30, "items": _GENERAL_CONFIG_SCHEMA},
+    ("payroll_setup", "calculation_groups"): {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": True, "items": {"type": "string", "minLength": 2, "maxLength": 60}},
+    ("payroll_setup", "sheets"): {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": True, "items": {"type": "string", "minLength": 2, "maxLength": 60}},
+    ("config_assignments", "vacations"): {"type": "array", "maxItems": 100, "items": _ASSIGNMENT_ITEM_SCHEMA},
+    ("config_assignments", "vacations_simulation"): {"type": "array", "maxItems": 100, "items": _ASSIGNMENT_ITEM_SCHEMA},
+    ("recruitment", "stages"): {"type": "array", "minItems": 2, "maxItems": 8, "uniqueItems": True, "items": {"type": "string", "minLength": 2, "maxLength": 40}},
+    ("recruitment", "evaluation_criteria"): {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": True, "items": {"type": "string", "minLength": 2, "maxLength": 40}},
+    ("process_fields", None): {"type": "array", "maxItems": 10, "items": _PROCESS_FIELD_SCHEMA},
+    ("assignments", "rules"): {"type": "array", "minItems": 1, "maxItems": 100, "items": {"type": "object", "additionalProperties": False, "required": ["process", "requester_group", "targets", "config_source"], "properties": {
+        "process": {"type": "string", "enum": ["*", *PROCESS_KEYS]}, "requester_group": {"type": ["string", "null"]}, "targets": {"type": "array", "minItems": 1, "uniqueItems": True, "items": {"type": "string", "enum": list(TARGETS)}},
+        "config_source": {"type": "string", "enum": ["requester", "target"]}}}},
+    ("payroll", "currency"): {"type": "string", "minLength": 3, "maxLength": 3},
+}
+
+def field_schema(module: str, key: str) -> dict:
+    """JSON Schema do valor de um parâmetro, derivado da estrutura de DEFAULTS e das regras de validate_config.
+    O ERP-AI monta a saída estruturada do modelo e a validação determinística a partir daqui."""
+    if (module, key) in SPECIAL_SCHEMAS:
+        return SPECIAL_SCHEMAS[(module, key)]
+    if module == "process_fields":
+        return SPECIAL_SCHEMAS[("process_fields", None)]
+    value = DEFAULTS[module][key]
+    if type(value) is bool:
+        return {"type": "boolean"}
+    if type(value) is int:
+        schema = {"type": "integer"}
+        if key in BOUNDS:
+            schema.update(minimum=BOUNDS[key][0], maximum=BOUNDS[key][1])
+        return schema
+    if isinstance(value, str):
+        return {"type": "string"}
+    if isinstance(value, list):
+        return {"type": "array", "items": {"type": "string"}} if all(isinstance(v, str) for v in value) else {"type": "array"}
+    return {"type": "object"}
+
 def field_catalog(module: str) -> list[dict]:
     """Metadata so the UI can render a generic editor for every module."""
     fields = []

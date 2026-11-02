@@ -120,7 +120,7 @@ def report_for(module, before, after, payloads):
 def get_operation(db, module, operation_id):
     check_module(module)
     row=db.get(IntegrationOperation,str(operation_id))
-    if not row or row.payload.get("module")!=module: raise HTTPException(404,"Operação não encontrada neste módulo")
+    if not row or row.payload.get("module")!=module or row.payload.get("contract") not in (None,1): raise HTTPException(404,"Operação não encontrada neste módulo")
     return row
 
 @router.post("/modules/{module}/apply", dependencies=[Depends(execution_auth)])

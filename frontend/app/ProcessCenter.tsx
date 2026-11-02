@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { AlarmClock, Check, ClipboardList, FilePlus2, Inbox, ListChecks, Plus, Save, Settings2, Trash2, X } from "lucide-react";
+import { AlarmClock, Check, ClipboardList, FilePlus2, Inbox, ListChecks, Plus, Save, Trash2, X } from "lucide-react";
+import { SuiteLink } from "./Navigation";
 import { api, datePt, dateTimePt, message, post, put, type Environment, type SessionUser } from "./http";
 import { AdditionalFieldsEditor, GeneralConfigsEditor, type GeneralConfig } from "./SuiteEditors";
 
@@ -19,37 +20,34 @@ type Option = { id: number | string; name: string };
 type Options = { departments: Option[]; positions: Option[]; groups: Option[]; employees?: Option[]; companies?: Option[]; payroll_events?: Option[]; transport_lines: Option[]; dependents?: Option[]; recess_balance?: number | null;
   target?: { departments: Option[]; positions: Option[]; groups: Option[] } };
 type Target = { id: number; full_name: string; registration: string; contract_type: string; is_self: boolean };
-type Tab = "new" | "mine" | "manager" | "config";
+type Tab = "new" | "mine" | "manager";
 
 const ACTION_LABELS: Record<string, string> = { submitted: "Enviado", approved: "Aprovado", rejected: "Reprovado", cancelled: "Cancelado", auto_approved: "Aprovado automaticamente", fallback: "Encaminhado", no_approver: "Sem aprovador" };
 const DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const TARGET_LABELS: Record<string, string> = { self: "Próprio solicitante", direct: "Subordinados diretos", indirect: "Subordinados indiretos", visibility: "Por visibilidade (mesmo departamento)" };
 
-export default function ProcessCenter({ user, companyId, environment, onToast, initialTab }: { user: SessionUser; companyId: string; environment: Environment; onToast: (m: string) => void; initialTab?: Tab }) {
+export default function ProcessCenter({ user, companyId, environment, onToast, initialTab, onOpenSuite }: { user: SessionUser; companyId: string; environment: Environment; onToast: (m: string) => void; initialTab?: Tab; onOpenSuite?: (nodeId: string) => void }) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab || (user.role === "employee" ? "new" : "manager"));
   const [error, setError] = useState("");
   const [opened, setOpened] = useState<RequestRow | null>(null);
   const [refresh, setRefresh] = useState(0);
-  const canConfigure = user.role === "system_admin" || user.role === "consultant";
   useEffect(() => { if (!companyId) return; api<Catalog>(`/processes/catalog?company_id=${companyId}&environment=${environment}`).then(setCatalog).catch(e => setError(message(e))); }, [companyId, environment]);
   const openRequest = useCallback(async (id: number) => { try { setOpened(await api<RequestRow>(`/processes/requests/${id}`)); } catch (e) { setError(message(e)); } }, []);
   if (!companyId) return <div className="empty">Selecione uma empresa no topo da página para usar os processos.</div>;
   return <>
-    <div className="page-head"><div><div className="eyebrow">Autoatendimento e workflow</div><h1 className="page-title">Processos parametrizáveis</h1>
-      <p className="page-desc">Solicitações com etapas de aprovação, prazo de atendimento (SLA), atribuições de seleção e efeito automático no cadastro.</p></div></div>
+    <div className="page-head"><div><div className="eyebrow">Autoatendimento e workflow</div><h1 className="page-title">Gerenciador de processos</h1>
+      <p className="page-desc">Solicitações com etapas de aprovação, prazo de atendimento (SLA) e efeito automático no cadastro.</p><SuiteLink user={user} nodeId="guia-gerenciador" onOpen={onOpenSuite} /></div></div>
     <div className="tabs" role="tablist" style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
       <TabButton active={tab === "new"} onClick={() => setTab("new")} icon={<FilePlus2 size={15} />}>{user.role === "consultant" ? "Simular solicitação" : "Nova solicitação"}</TabButton>
       <TabButton active={tab === "mine"} onClick={() => setTab("mine")} icon={<ClipboardList size={15} />}>Minhas solicitações</TabButton>
       <TabButton active={tab === "manager"} onClick={() => setTab("manager")} icon={<Inbox size={15} />}>Gerenciador de processos</TabButton>
-      {canConfigure && <TabButton active={tab === "config"} onClick={() => setTab("config")} icon={<Settings2 size={15} />}>Parametrização</TabButton>}
     </div>
     {error && <div className="alert alert-error">{error}</div>}
     {!catalog ? <div className="loading">Carregando…</div> : <>
       {tab === "new" && <NewRequest catalog={catalog} user={user} companyId={companyId} onCreated={row => { onToast(`Solicitação nº ${row.id} registrada: ${row.status_label}.`); setOpened(row); setRefresh(x => x + 1); }} />}
       {tab === "mine" && <RequestList key={`mine-${refresh}`} scope="mine" companyId={companyId} catalog={catalog} onOpen={openRequest} />}
       {tab === "manager" && <Manager key={`mgr-${refresh}`} user={user} companyId={companyId} catalog={catalog} onOpen={openRequest} />}
-      {tab === "config" && canConfigure && <Parametrization catalog={catalog} companyId={companyId} environment={environment} onToast={onToast} />}
     </>}
     {opened && <RequestModal row={opened} user={user} close={() => setOpened(null)} onChanged={row => { setOpened(row); setRefresh(x => x + 1); onToast(`Solicitação nº ${row.id}: ${row.status_label}.`); }} />}
   </>;
@@ -140,7 +138,7 @@ function TransportLines({ value, lines, onChange }: { value: { line_id: number; 
       <select className="field" value={item.line_id} onChange={e => onChange(value.map((v, i) => i === index ? { ...v, line_id: Number(e.target.value) } : v))}>{lines.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select>
       <input className="field" type="number" min={1} max={6} value={item.trips_per_day} style={{ maxWidth: 110 }} aria-label="Viagens por dia" onChange={e => onChange(value.map((v, i) => i === index ? { ...v, trips_per_day: Number(e.target.value) } : v))} />
       <button type="button" className="btn btn-quiet" aria-label="Remover linha" onClick={() => onChange(value.filter((_, i) => i !== index))}><Trash2 size={14} /></button></div>)}
-    {lines.length ? <button type="button" className="btn" onClick={() => onChange([...value, { line_id: Number(lines[0].id), trips_per_day: 2 }])}><Plus size={14} />Adicionar linha</button> : <span className="hint">Nenhuma linha cadastrada em Configuração da empresa → Vale-transporte.</span>}
+    {lines.length ? <button type="button" className="btn" onClick={() => onChange([...value, { line_id: Number(lines[0].id), trips_per_day: 2 }])}><Plus size={14} />Adicionar linha</button> : <span className="hint">Nenhuma linha cadastrada. O RH cadastra as linhas na Suíte, em Cadastros da Empresa → Linhas de Vale-Transporte.</span>}
   </div>;
 }
 
@@ -220,15 +218,6 @@ type ConfigResponse = { effective: { version: number; effective_from: string | n
 export type WorkflowMode = "all" | "steps" | "overrides" | "sla";
 let catalogCache: Promise<Catalog> | null = null;
 export function loadCatalog(): Promise<Catalog> { catalogCache = catalogCache || api<Catalog>("/processes/catalog").catch(e => { catalogCache = null; throw e; }); return catalogCache; }
-
-function Parametrization({ catalog, companyId, environment, onToast }: { catalog: Catalog; companyId: string; environment: Environment; onToast: (m: string) => void }) {
-  const editable = catalog.modules;
-  const [module, setModule] = useState(editable.find(m => m.module === "contracting")?.module || editable[0]?.module || "");
-  return <section className="section-panel" style={{ padding: 20 }}>
-    <Labeled label="Parâmetro"><select className="field" value={module} onChange={e => setModule(e.target.value)}>{editable.map(m => <option key={m.module} value={m.module}>{m.label}</option>)}</select></Labeled>
-    <div style={{ marginTop: 14 }}><ModuleEditor key={module} module={module} companyId={companyId} environment={environment} onToast={onToast} /></div>
-  </section>;
-}
 
 /** Versioned editor for one parameter module (homologation only; production is read-only until published). */
 export function ModuleEditor({ module, companyId, environment, onToast, workflowMode = "all", canEdit = true }: { module: string; companyId: string; environment: Environment; onToast: (m: string) => void; workflowMode?: WorkflowMode; canEdit?: boolean }) {

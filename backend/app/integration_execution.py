@@ -53,6 +53,23 @@ def schedules(rows):
         latest[(row["scope_key"], row["effective_from"])] = {"scope_key": row["scope_key"], "effective_from": row["effective_from"], **{key: row[key] for key in CONFIG_FIELDS}}
     return latest
 
+def policy_checks(group_name, config, as_of):
+    """Dependency, policy and timing probes for one effective rule. Shared by the v1 and v2 contracts."""
+    checks = [{"name": f"Dependências válidas: {group_name}", "passed": not config_errors(config), "origin": "Validador oficial"}]
+    probes = []
+    for who in ("employee", "manager"):
+        for installments in (1, 2, 3, 4):
+            for advance in (False, True):
+                errors = vacation_policy_errors(config, who, installments, advance, True)
+                expected_allowed = config["process_enabled"] and config["simulation_enabled"] and config[who + "_request_enabled"] and installments <= (config["max_installments"] if config["installments_allowed"] else 1) and (not advance or config["allow_13th_advance"])
+                probes.append({"requester": who, "installments": installments, "advance_13th": advance, "allowed": not errors, "errors": errors, "passed": (not errors) == expected_allowed})
+    checks.append({"name": f"Limites, solicitações e adiantamento: {group_name}", "passed": all(probe["passed"] for probe in probes), "origin": "Motor de regras usado na simulação operacional", "probes": probes})
+    reference = date.fromisoformat(as_of)
+    earliest = reference + timedelta(days=config["min_advance_days"])
+    timing = [{"start_date": (earliest + timedelta(days=offset)).isoformat(), "allowed": not vacation_timing_errors(config, earliest + timedelta(days=offset), 1, 30, reference), "expected_allowed": offset >= 0} for offset in (-1, 0, 1)]
+    checks.append({"name": f"Antecedência e saldo fictício: {group_name}", "passed": all(t["allowed"] == t["expected_allowed"] for t in timing) and bool(vacation_timing_errors(config, earliest, 31, 30, reference)), "origin": "Motor de datas e saldo com cenário sintético na vigência aprovada", "timing_probes": timing})
+    return checks
+
 def test_result(before, after, payloads):
     expected = schedules(before["schedules"]["homologation"])
     for item in payloads:
@@ -75,19 +92,7 @@ def test_result(before, after, payloads):
                 target = max(candidates, key=lambda value: value["effective_from"])
                 break
         checks.append({"name": f"Precedência e valores efetivos: {row['group_name']}", "passed": target is not None and all(target[key] == config[key] for key in CONFIG_FIELDS), "origin": "Resolução real por vigência"})
-        checks.append({"name": f"Dependências válidas: {row['group_name']}", "passed": not config_errors(config), "origin": "Validador oficial"})
-        probes = []
-        for who in ("employee", "manager"):
-            for installments in (1, 2, 3, 4):
-                for advance in (False, True):
-                    errors = vacation_policy_errors(config, who, installments, advance, True)
-                    expected_allowed = config["process_enabled"] and config["simulation_enabled"] and config[who + "_request_enabled"] and installments <= (config["max_installments"] if config["installments_allowed"] else 1) and (not advance or config["allow_13th_advance"])
-                    probes.append({"requester": who, "installments": installments, "advance_13th": advance, "allowed": not errors, "errors": errors, "passed": (not errors) == expected_allowed})
-        checks.append({"name": f"Limites, solicitações e adiantamento: {row['group_name']}", "passed": all(probe["passed"] for probe in probes), "origin": "Motor de regras usado na simulação operacional", "probes": probes})
-        reference = date.fromisoformat(after["as_of"])
-        earliest = reference + timedelta(days=config["min_advance_days"])
-        timing = [{"start_date": (earliest + timedelta(days=offset)).isoformat(), "allowed": not vacation_timing_errors(config, earliest + timedelta(days=offset), 1, 30, reference), "expected_allowed": offset >= 0} for offset in (-1, 0, 1)]
-        checks.append({"name": f"Antecedência e saldo fictício: {row['group_name']}", "passed": all(t["allowed"] == t["expected_allowed"] for t in timing) and bool(vacation_timing_errors(config, earliest, 31, 30, reference)), "origin": "Motor de datas e saldo com cenário sintético na vigência aprovada", "timing_probes": timing})
+        checks.extend(policy_checks(row["group_name"], config, after["as_of"]))
     return {"passed": all(check["passed"] for check in checks), "checks": checks,
             "limits": "Testes automáticos de configuração, precedência e política de férias. Não criam solicitações reais nem comprovam requisitos ambíguos ou cálculos trabalhistas."}
 
@@ -99,7 +104,7 @@ def operation_out(row):
 @router.get("/vacations/operations/{operation_id}")
 def operation(operation_id: UUID, db: Session = Depends(get_db)):
     row = db.get(IntegrationOperation, str(operation_id))
-    if not row or row.payload.get("module") not in (None, "vacations"):
+    if not row or row.payload.get("module") not in (None, "vacations") or row.payload.get("contract") not in (None, 1):
         raise HTTPException(404, "Operação não encontrada")
     return operation_out(row)
 
@@ -177,7 +182,7 @@ def apply(payload: ExecutionInput, db: Session = Depends(get_db)):
 @router.get("/vacations/operations/{operation_id}/verify")
 def verify(operation_id: UUID, db: Session = Depends(get_db)):
     row = db.get(IntegrationOperation, str(operation_id))
-    if not row or row.payload.get("module") not in (None, "vacations"):
+    if not row or row.payload.get("module") not in (None, "vacations") or row.payload.get("contract") not in (None, 1):
         raise HTTPException(404, "Operação não encontrada")
     company = db.get(Company, row.company_id)
     current = snapshot(company.code, date.fromisoformat(row.payload["effective_from"]), db)
@@ -187,7 +192,7 @@ def verify(operation_id: UUID, db: Session = Depends(get_db)):
 @router.post("/vacations/operations/{operation_id}/rollback", dependencies=[Depends(execution_auth)])
 def rollback(operation_id: UUID, payload: RollbackInput, db: Session = Depends(get_db)):
     row = db.get(IntegrationOperation, str(operation_id))
-    if not row or row.payload.get("module") not in (None, "vacations"):
+    if not row or row.payload.get("module") not in (None, "vacations") or row.payload.get("contract") not in (None, 1):
         raise HTTPException(404, "Operação não encontrada")
     company = db.scalar(select(Company).where(Company.id == row.company_id).with_for_update())
     db.refresh(row)

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Briefcase, CalendarClock, Check, ChevronRight, Plus, Search, Star, UserPlus, Users, X } from "lucide-react";
 import { api, datePt, dateTimePt, message, money, post, put, type SessionUser } from "./http";
+import { SuiteLink } from "./Navigation";
 
 type Vacancy = { id: number; code: string; title: string; department_id: number; department: string; position_id: number; position: string; requisition_id: number | null; hiring_manager_id?: number | null; hiring_manager: string | null;
   description: string; requirements: string; contract_type: string; salary_min: number | null; salary_max: number | null; quantity: number; hired?: number; recruitment_type: "internal" | "external" | "mixed";
@@ -21,7 +22,7 @@ const TYPE_LABELS = { internal: "Interna", external: "Externa", mixed: "Interna 
 const SOURCES: Record<string, string> = { site: "Site de carreiras", indicacao: "Indicação", linkedin: "LinkedIn", agencia: "Agência", interno: "Interno", outro: "Outro" };
 const EVENT_LABELS: Record<string, string> = { applied: "Candidatura registrada", moved: "Mudou de etapa", evaluation: "Avaliação", interview: "Entrevista", rejected: "Reprovado", withdrawn: "Desistência", offer: "Contratação iniciada", hired: "Contratado", note: "Observação" };
 
-export default function RecruitmentCenter({ user, companyId, onToast }: { user: SessionUser; companyId: string; onToast: (m: string) => void }) {
+export default function RecruitmentCenter({ user, companyId, onToast, onOpenSuite }: { user: SessionUser; companyId: string; onToast: (m: string) => void; onOpenSuite?: (nodeId: string) => void }) {
   const manager = user.role === "system_admin" || user.role === "hr_manager";
   const viewer = manager || user.role === "consultant";
   const [tab, setTab] = useState<Tab>(viewer ? "vacancies" : "internal");
@@ -44,7 +45,7 @@ export default function RecruitmentCenter({ user, companyId, onToast }: { user: 
   const openPipeline = (id: number) => { setSelected(id); setTab("pipeline"); };
   return <>
     <div className="page-head"><div><div className="eyebrow">Recrutar e selecionar</div><h1 className="page-title">Recrutamento e seleção</h1>
-      <p className="page-desc">Vagas abertas pela requisição de pessoal, banco de talentos com consentimento (LGPD), etapas e avaliações, entrevistas, vagas internas e contratação integrada à admissão.</p></div>
+      <p className="page-desc">Vagas abertas pela requisição de pessoal, banco de talentos com consentimento (LGPD), etapas e avaliações, entrevistas, vagas internas e contratação integrada à admissão.</p><SuiteLink user={user} nodeId="recrutamento" onOpen={onOpenSuite} /></div>
       {manager && <button className="btn btn-primary" onClick={() => setEditing("new")}><Plus size={15} />Nova vaga</button>}</div>
     {summary && <div className="cards" style={{ marginBottom: 14 }}>
       <Stat label="Vagas abertas" value={summary.open_vacancies} note={`${summary.draft_vacancies} em rascunho`} /><Stat label="Candidatos em processo" value={summary.active_applications} note="Ativos ou em contratação" />

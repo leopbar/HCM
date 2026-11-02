@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownToLine, BookOpen, Check, CircleHelp, ClipboardCheck, FileJson2, GraduationCap, RefreshCw, Upload } from "lucide-react";
+import { ArrowDownToLine, BookOpen, Check, CircleHelp, ClipboardCheck, GraduationCap, RefreshCw, Upload } from "lucide-react";
 import "./training.css";
 
 type Company = { id: number; code: string; trade_name: string };
@@ -90,8 +90,8 @@ export default function TrainingCenter({ token, companyId, companies, environmen
   }
 
   return <>
-    <div className="page-head"><div><div className="eyebrow">Capacitação funcional</div><h1 className="page-title">Aprenda a Parametrizar</h1><p className="page-desc">Pratique configurações, testes e migrações com dados fictícios. As verificações usam as regras reais do backend.</p></div><div className="training-company">{company?.trade_name || "Selecione uma empresa"}</div></div>
-    <div className="training-tabs" role="tablist"><button className={tab === "exercises" ? "active" : ""} onClick={() => setTab("exercises")}><GraduationCap size={15}/>Exercícios</button><button className={tab === "transfer" ? "active" : ""} onClick={() => setTab("transfer")}><FileJson2 size={15}/>Importar / Exportar</button><button className={tab === "help" ? "active" : ""} onClick={() => setTab("help")}><CircleHelp size={15}/>Central de Ajuda</button></div>
+    {tab !== "transfer" && <><div className="page-head"><div><div className="eyebrow">Capacitação funcional</div><h1 className="page-title">Aprenda a Parametrizar</h1><p className="page-desc">Pratique configurações, testes e migrações com dados fictícios. As verificações usam as regras reais do backend.</p></div><div className="training-company">{company?.trade_name || "Selecione uma empresa"}</div></div>
+    <div className="training-tabs" role="tablist"><button className={tab === "exercises" ? "active" : ""} onClick={() => setTab("exercises")}><GraduationCap size={15}/>Exercícios</button><button className={tab === "help" ? "active" : ""} onClick={() => setTab("help")}><CircleHelp size={15}/>Central de Ajuda</button></div></>}
     {error && <div className="alert alert-error">{error}</div>}
     {!companyId && <div className="section-note">Selecione uma empresa na barra superior para abrir os roteiros e arquivos de configuração.</div>}
 

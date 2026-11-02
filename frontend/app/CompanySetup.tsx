@@ -31,7 +31,7 @@ export default function CompanySetup({ user, companyId, onToast, initialTab, emb
     {tab === "positions" && <Positions base={base} companyId={companyId} options={options} onToast={onToast} />}
     {tab === "transport" && <TransportLines base={base} onToast={onToast} />}
     {tab === "org" && <OrgChart base={base} />}
-    {user.role === "consultant" && <p className="hint" style={{ marginTop: 12 }}>Estes cadastros são dados mestres da empresa (não passam por homologação). As regras que os utilizam são parametrizadas em Processos → Parametrização.</p>}
+    {user.role === "consultant" && <p className="hint" style={{ marginTop: 12 }}>Estes cadastros são dados mestres da empresa (não passam por homologação). As regras que os utilizam ficam em Configurações por Empresa e nas Configurações Gerais dos processos.</p>}
   </>;
 }
 
@@ -95,7 +95,7 @@ function TransportLines({ base, onToast }: { base: string; onToast: (m: string) 
       <label className="field-wrap" style={{ flexDirection: "row", gap: 8, alignItems: "center" }}><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} />Ativa</label><div><button className="btn btn-primary"><Save size={14} />Salvar linha</button></div></form>
     {error && <div className="alert alert-error">{error}</div>}
     <div className="table-wrap" style={{ marginTop: 14 }}><table><thead><tr><th>Código</th><th>Descrição</th><th>Tarifa</th><th>Situação</th></tr></thead><tbody>{rows.map(r => <tr key={r.id} onClick={() => setForm({ code: r.code, description: r.description, fare: String(r.fare), active: r.active })} style={{ cursor: "pointer" }}><td className="code">{r.code}</td><td>{r.description}</td><td>{money(r.fare)}</td><td><span className="tag">{r.active ? "Ativa" : "Inativa"}</span></td></tr>)}</tbody></table>{rows.length === 0 && <div className="empty">Nenhuma linha cadastrada.</div>}</div>
-    <p className="hint">O desconto do colaborador (até 6% do salário-base, Lei 7.418/1985) é parametrizado em Processos → Parametrização → Vale-transporte.</p>
+    <p className="hint">O desconto do colaborador (até 6% do salário-base, Lei 7.418/1985) é parametrizado em Configurações por Empresa → Vale-Transporte.</p>
   </section>;
 }
 
