@@ -8,6 +8,8 @@ const securityHeaders = [
 
 const nextConfig = {
   poweredByHeader: false,
+  // Production image ships only the traced server (Dockerfile.prod); ignored by next dev.
+  output: "standalone",
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

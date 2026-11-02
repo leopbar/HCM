@@ -65,6 +65,7 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
           printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/deploy_key
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "root@$VPS_HOST" deploy
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "root@$VPS_HOST" deploy
       - name: Conferir o site
         run: curl -fsS --retry 10 --retry-delay 5 --retry-all-errors -o /dev/null -w '%{http_code}\n' https://hcm.lbai.dev/
